@@ -1,5 +1,5 @@
 .*/*
-.github/*
+/.github
 !.vscode/settings.json
 .idea
 Cargo.lock

@@ -38,6 +38,6 @@ pub fn init_logger()
         Some("INFO")=>log::set_max_level(LevelFilter::Info),
         Some("WARN")=>log::set_max_level(LevelFilter::Warn),
         Some("ERROR")=>log::set_max_level(LevelFilter::Error),
-        _=>log::set_max_level(LevelFilter::Trace),
+        _=>log::set_max_level(LevelFilter::Off),
     }
 }
