@@ -1,15 +1,15 @@
-OUTPUT_ARCH(riscv)
-ENTRY(_start)
-BASE_ADDRESS = 0x80200000;
+OUTPUT_ARCH(riscv)#目标平台
+ENTRY(_start)#入口
+BASE_ADDRESS = 0x80200000;#起始地址
 
-SECTIONS
+SECTIONS #调整内核文件布局
 {
     . = BASE_ADDRESS;
     skernel = .;
 
     stext = .;
     .text : {
-        *(.text.entry)
+        *(.text.entry)#entry.asm的位置，位于0x80200000
         *(.text .text.*)
     }
 

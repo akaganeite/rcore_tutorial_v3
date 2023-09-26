@@ -12,7 +12,7 @@ use log::*;
 global_asm!(include_str!("entry.asm"));
 
 #[no_mangle]
-pub fn rust_main()->! {
+pub fn main()->! {
     clear_bss();
     extern "C" {
         fn stext();
@@ -32,8 +32,8 @@ pub fn rust_main()->! {
     info!("[kernel].data [{:#x}, {:#x})", sdata as usize, edata as usize);
     info!("[kernel].bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
     info!("[kernel].boot_stack lower_bound:{:#x}, top:{:#x}", boot_stack_lower_bound as usize, boot_stack_top as usize);
-    info!("Hello_world");
-    panic!("shutdown");
+    error!("Hello_world");
+    panic!("kernel_shutdown");
 }
 
 fn clear_bss(){

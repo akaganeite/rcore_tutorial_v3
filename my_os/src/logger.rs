@@ -1,5 +1,5 @@
 //#![allow(unused)]
-use log::{Log,Record, Level, Metadata,LevelFilter};
+use log::{Level,LevelFilter};
 struct SimpleLogger;
 
 impl log::Log for SimpleLogger {
