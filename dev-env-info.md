@@ -5,7 +5,7 @@ rCore-Tutorial version 3.x
 
 ### Binaries
 
-* rustc: 1.57.0-nightly (e1e9319d9 2021-10-14)
+* rustc: 1.74.0-nightly (b4e54c6e3 2023-09-11)
 
 * cargo-binutils: 0.3.3
 
