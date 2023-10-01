@@ -18,32 +18,35 @@ struct KernelStack {
 }
 
 #[repr(align(4096))]
-struct UserStack {
+/// comment #![deny(missing_docs)]
+pub struct UserStack {
     data: [u8; USER_STACK_SIZE],
 }
 
 static KERNEL_STACK: KernelStack = KernelStack {
     data: [0; KERNEL_STACK_SIZE],
 };
-static USER_STACK: UserStack = UserStack {
+/// comment #![deny(missing_docs)]
+pub static USER_STACK: UserStack = UserStack {
     data: [0; USER_STACK_SIZE],
 };
 
 impl KernelStack {
     fn get_sp(&self) -> usize {
-        self.data.as_ptr() as usize + KERNEL_STACK_SIZE
+        self.data.as_ptr() as usize + KERNEL_STACK_SIZE//栈顶地址
     }
     pub fn push_context(&self, cx: TrapContext) -> &'static mut TrapContext {
         let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
         unsafe {
-            *cx_ptr = cx;
+            *cx_ptr = cx;//直接通过unsafe压站，绕过编译器检查
         }
         unsafe { cx_ptr.as_mut().unwrap() }
     }
 }
 
 impl UserStack {
-    fn get_sp(&self) -> usize {
+    /// comment #![deny(missing_docs)]
+    pub fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 }
@@ -75,12 +78,12 @@ impl AppManager {
         println!("[kernel] Loading app_{}", app_id);
         // clear app area
         core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, APP_SIZE_LIMIT).fill(0);
-        let app_src = core::slice::from_raw_parts(
-            self.app_start[app_id] as *const u8,
-            self.app_start[app_id + 1] - self.app_start[app_id],
+        let app_src = core::slice::from_raw_parts(//从ptr和len中取元素
+            self.app_start[app_id] as *const u8,//u8类型地址指针，指向app起始地址
+            self.app_start[app_id + 1] - self.app_start[app_id],//取多少个
         );
         let app_dst = core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, app_src.len());
-        app_dst.copy_from_slice(app_src);
+        app_dst.copy_from_slice(app_src);//加载到0x80400（memcpy一个数组）
         // Memory fence about fetching the instruction memory
         // It is guaranteed that a subsequent instruction fetch must
         // observes all previous writes to the instruction memory.
@@ -103,15 +106,15 @@ lazy_static! {
     static ref APP_MANAGER: UPSafeCell<AppManager> = unsafe {
         UPSafeCell::new({
             extern "C" {
-                fn _num_app();
+                fn _num_app();//.quad 5
             }
-            let num_app_ptr = _num_app as usize as *const usize;
-            let num_app = num_app_ptr.read_volatile();
+            let num_app_ptr = _num_app as usize as *const usize;//转为指针
+            let num_app = num_app_ptr.read_volatile();//读取指向的64位空间
             let mut app_start: [usize; MAX_APP_NUM + 1] = [0; MAX_APP_NUM + 1];
             let app_start_raw: &[usize] =
-                core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1);
+                core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1);//依次标记程序起始地址
             app_start[..=num_app].copy_from_slice(app_start_raw);
-            AppManager {
+            AppManager {//创建appmanager
                 num_app,
                 current_app: 0,
                 app_start,
@@ -128,17 +131,17 @@ pub fn init() {
 /// print apps info
 pub fn print_app_info() {
     APP_MANAGER.exclusive_access().print_app_info();
-}
+}//自动drop了返回的引用
 
 /// run next app
 pub fn run_next_app() -> ! {
-    let mut app_manager = APP_MANAGER.exclusive_access();
+    let mut app_manager = APP_MANAGER.exclusive_access();//获得动态引用
     let current_app = app_manager.get_current_app();
     unsafe {
         app_manager.load_app(current_app);
     }
     app_manager.move_to_next_app();
-    drop(app_manager);
+    drop(app_manager);//下面跳转到汇编，运行用户态程序，所以要手动drop？
     // before this we have to drop local variables related to resources manually
     // and release the resources
     extern "C" {
@@ -146,7 +149,7 @@ pub fn run_next_app() -> ! {
     }
     unsafe {
         __restore(KERNEL_STACK.push_context(TrapContext::app_init_context(
-            APP_BASE_ADDRESS,
+            APP_BASE_ADDRESS,//apptrapxontext压入内核栈，返回新的sp
             USER_STACK.get_sp(),
         )) as *const _ as usize);
     }

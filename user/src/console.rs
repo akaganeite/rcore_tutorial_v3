@@ -7,13 +7,13 @@ const STDOUT: usize = 1;
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        write(STDOUT, s.as_bytes());
+        write(STDOUT, s.as_bytes());//str切片转为u8数组
         Ok(())
     }
 }
 
 pub fn print(args: fmt::Arguments) {
-    Stdout.write_fmt(args).unwrap();
+    Stdout.write_fmt(args).unwrap();//write_fmt也要调用write_str
 }
 
 #[macro_export]
