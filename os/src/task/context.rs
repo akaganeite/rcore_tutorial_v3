@@ -29,7 +29,7 @@ impl TaskContext {
         }
         Self {
             ra: __restore as usize,//设置restore为taskcontext的返回地址
-            sp: kstack_ptr,
+            sp: kstack_ptr,//sp为内核栈顶指针
             s: [0; 12],
         }
     }

@@ -59,6 +59,7 @@ lazy_static! {
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
+            //init把trapcontext压入内核栈，goto设置taskcontext的ra和sp
             task.task_status = TaskStatus::Ready;//装载后是就绪态
         }
         TaskManager {
@@ -82,13 +83,13 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
-        let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
+        let next_task_cx_ptr = &task0.task_cx as *const TaskContext;//即将通过switch换入
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
-        unsafe {
+        unsafe {//当前部分状态保存到unused指向的地址
             __switch(&mut _unused as *mut TaskContext, next_task_cx_ptr);
-        }
+        }//switch结束后ret到restore
         panic!("unreachable in run_first_task!");
     }
 
@@ -113,7 +114,7 @@ impl TaskManager {
         let inner = self.inner.exclusive_access();
         let current = inner.current_task;
         (current + 1..current + self.num_app + 1)
-            .map(|id| id % self.num_app)
+            .map(|id| id % self.num_app)//从当前id开始，找到当前id-1 
             .find(|id| inner.tasks[*id].task_status == TaskStatus::Ready)
     }
 
@@ -133,13 +134,13 @@ impl TaskManager {
                 __switch(current_task_cx_ptr, next_task_cx_ptr);
             }
             // go back to user mode
-        } else {
+        } else {//都跑完了
             println!("All applications completed!");
             shutdown(false);
         }
     }
 }
-
+//对外接口
 /// run first task
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task();

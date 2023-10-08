@@ -90,9 +90,9 @@ pub fn load_apps() {
 }
 
 /// get app info with entry and sp and save `TrapContext` in kernel stack
-pub fn init_app_cx(app_id: usize) -> usize {
+pub fn init_app_cx(app_id: usize) -> usize {//把这个trapcontext压入内核栈
     KERNEL_STACK[app_id].push_context(TrapContext::app_init_context(
-        get_base_i(app_id),
-        USER_STACK[app_id].get_sp(),
+        get_base_i(app_id),//起始地址
+        USER_STACK[app_id].get_sp(),//用户栈指针
     ))
 }
