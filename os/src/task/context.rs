@@ -28,7 +28,7 @@ impl TaskContext {
             fn __restore();
         }
         Self {
-            ra: __restore as usize,
+            ra: __restore as usize,//设置restore为taskcontext的返回地址
             sp: kstack_ptr,
             s: [0; 12],
         }

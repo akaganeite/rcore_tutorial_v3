@@ -53,20 +53,20 @@ lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
+        let mut tasks = [TaskControlBlock {//列表中所有的控制块都初始化为0和uninit
+            task_cx: TaskContext::zero_init(),//初始化为全0
             task_status: TaskStatus::UnInit,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
-            task.task_status = TaskStatus::Ready;
+            task.task_status = TaskStatus::Ready;//装载后是就绪态
         }
         TaskManager {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
-                    current_task: 0,
+                    current_task: 0,//从0号task开始执行
                 })
             },
         }
