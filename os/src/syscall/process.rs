@@ -1,6 +1,22 @@
 //! Process management syscalls
-use crate::task::{exit_current_and_run_next, suspend_current_and_run_next};
-use crate::timer::get_time_ms;
+use crate::task::{exit_current_and_run_next, suspend_current_and_run_next,get_task_info,TaskStatus};
+use crate::timer::get_time_us;
+//use super::SYSCALL_GET_TIME;
+use crate::config::MAX_SYSCALL_NUM;
+
+pub struct TimeVal {
+    pub sec: usize,
+    pub usec: usize,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct TaskInfo {
+    pub status: TaskStatus,
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub time: usize,
+    pub off_time:usize,
+}
 
 /// task exits and submit an exit code
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -16,6 +32,28 @@ pub fn sys_yield() -> isize {
 }
 
 /// get time in milliseconds
-pub fn sys_get_time() -> isize {
-    get_time_ms() as isize
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
+    let us = get_time_us();
+    unsafe {
+        *ts = TimeVal {
+            sec: us / 1_000_000,
+            usec: us % 1_000_000,
+        }
+    }
+    0
+}
+
+/// YOUR JOB: Finish sys_task_info to pass testcases
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
+    let  tcb=get_task_info();
+    //println!("kern_time:{}",tcb.kern_time);
+    unsafe {
+        *ti=TaskInfo {
+            status:tcb.task_status,
+            syscall_times:tcb.syscall_times,
+            time:tcb.my_time,
+            off_time:tcb.user_time_off+tcb.kern_time_off,
+        };
+    }
+    0
 }

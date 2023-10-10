@@ -15,14 +15,15 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM,MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sbi::shutdown;
 use crate::sync::UPSafeCell;
 use lazy_static::*;
 use switch::__switch;
-use task::{TaskControlBlock, TaskStatus};
-
+use crate::timer::get_time_ms;
+use task::TaskControlBlock;
+pub use task::TaskStatus;
 pub use context::TaskContext;
 
 /// The task manager, where all the tasks are managed.
@@ -47,6 +48,10 @@ pub struct TaskManagerInner {
     tasks: [TaskControlBlock; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
+    ///计时器
+    timer:usize,
+    ///my_timer
+    my_timer:usize,
 }
 
 lazy_static! {
@@ -56,6 +61,10 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {//列表中所有的控制块都初始化为0和uninit
             task_cx: TaskContext::zero_init(),//初始化为全0
             task_status: TaskStatus::UnInit,
+            syscall_times: [0;MAX_SYSCALL_NUM],
+            my_time:0,
+            user_time_off:0,
+            kern_time_off:0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -65,6 +74,8 @@ lazy_static! {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
+                    timer:0,
+                    my_timer:0,
                     tasks,
                     current_task: 0,//从0号task开始执行
                 })
@@ -83,6 +94,12 @@ impl TaskManager {
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
+
+        //初始化timer，进入用户态，等待下次返回
+        //inner.refresh_my_watch();
+        inner.refresh_stop_watch();
+        inner.my_timer=get_time_ms();
+
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
@@ -96,6 +113,8 @@ impl TaskManager {
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
+        inner.tasks[current].kern_time_off += inner.refresh_stop_watch();
+        //inner.tasks[current].my_time += inner.refresh_my_watch();
         inner.tasks[current].task_status = TaskStatus::Ready;
     }
 
@@ -103,6 +122,7 @@ impl TaskManager {
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
+        inner.tasks[current].kern_time_off += inner.refresh_stop_watch();
         inner.tasks[current].task_status = TaskStatus::Exited;
     }
 
@@ -127,6 +147,11 @@ impl TaskManager {
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
+            
+            let now=get_time_ms();
+            inner.tasks[current].my_time+=now-inner.my_timer;
+            inner.my_timer=get_time_ms();
+
             drop(inner);
             // before this, we should drop local variables that must be dropped manually
             unsafe {
@@ -134,11 +159,45 @@ impl TaskManager {
             }
             // go back to user mode
         } else {
+            let mut inner = self.inner.exclusive_access();
+            let current = inner.current_task;
+            let now=get_time_ms();
+            inner.tasks[current].my_time+=now-inner.my_timer;
+            inner.my_timer=get_time_ms();
+            drop(inner);
             println!("All applications completed!");
-            shutdown(false);
+            shutdown();
         }
     }
+
+    fn stop_user_time(&self){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].user_time_off += inner.refresh_stop_watch();
+    
+    }
+    
+    ///start_user_timer?
+    fn start_user_time(&self){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+    
+        inner.tasks[current].kern_time_off += inner.refresh_stop_watch();
+    }    
 }
+
+
+impl TaskManagerInner{
+///timer_manage
+fn refresh_stop_watch(&mut self) -> usize {
+    let start_time = self.timer;
+    self.timer = get_time_ms();
+    self.timer - start_time
+}
+
+
+}
+
 
 /// run first task
 pub fn run_first_task() {
@@ -170,4 +229,28 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+///返回task_info
+pub fn get_task_info()->TaskControlBlock {
+    let inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    inner.tasks[current]
+}
+
+///增加syscall次数
+pub fn add_syscall_num(id:usize){
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    inner.tasks[current].syscall_times[id]+=1;
+}
+
+///user_time_stop
+pub fn user_time_stop(){
+    TASK_MANAGER.stop_user_time();
+}
+
+///user_time_start
+pub fn user_time_start(){
+    TASK_MANAGER.start_user_time();
 }
