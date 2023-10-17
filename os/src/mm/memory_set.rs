@@ -230,13 +230,14 @@ impl MemorySet {
             elf.header.pt2.entry_point() as usize,
         )
     }
-    pub fn activate(&self) {
+    pub fn activate(&self) {//激活内核地址空间
         let satp = self.page_table.token();
         unsafe {
             satp::write(satp);
             asm!("sfence.vma");
         }
     }
+    ///给一个虚拟页号，返回页表项
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }

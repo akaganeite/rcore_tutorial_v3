@@ -51,7 +51,7 @@ pub struct StackFrameAllocator {
 
 impl StackFrameAllocator {
     pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
-        self.current = l.0;
+        self.current = l.0;//ppn：44位
         self.end = r.0;
     }
 }
@@ -65,7 +65,7 @@ impl FrameAllocator for StackFrameAllocator {
     }
     fn alloc(&mut self) -> Option<PhysPageNum> {
         if let Some(ppn) = self.recycled.pop() {
-            Some(ppn.into())
+            Some(ppn.into())//如果有就用
         } else if self.current == self.end {
             None
         } else {
