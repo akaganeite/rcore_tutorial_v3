@@ -17,3 +17,5 @@ pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
 }
 
 pub use crate::board::{CLOCK_FREQ, MMIO};
+
+pub const MAX_SYSCALL_NUM: usize = 500;

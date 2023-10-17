@@ -13,18 +13,20 @@ mod context;
 mod switch;
 #[allow(clippy::module_inception)]
 mod task;
-
+use crate::config::MAX_SYSCALL_NUM;
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{VirtPageNum,MapPermission,VirtAddr};
 use crate::sbi::shutdown;
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
-use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-
+use crate::timer::{get_time_ms,get_time_us};
+use task::TaskControlBlock;
+pub use task::TaskStatus;
 /// The task manager, where all the tasks are managed.
 ///
 /// Functions implemented on `TaskManager` deals with all task state transitions
@@ -47,6 +49,10 @@ struct TaskManagerInner {
     tasks: Vec<TaskControlBlock>,
     /// id of current `Running` task
     current_task: usize,
+    ///计时器
+    timer:usize,
+    ///my_timer
+    my_timer:usize,
 }
 
 lazy_static! {
@@ -65,6 +71,8 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    timer:0,
+                    my_timer:0,
                 })
             },
         }
@@ -81,6 +89,12 @@ impl TaskManager {
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
+        
+        //初始化timer，进入用户态，等待下次返回
+        //inner.refresh_my_watch();
+        inner.refresh_stop_watch();
+        inner.my_timer=get_time_us();
+
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
@@ -94,6 +108,8 @@ impl TaskManager {
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
         let cur = inner.current_task;
+        inner.tasks[cur].kern_time_off += inner.refresh_stop_watch();
+        //inner.tasks[current].my_time += inner.refresh_my_watch();
         inner.tasks[cur].task_status = TaskStatus::Ready;
     }
 
@@ -101,6 +117,7 @@ impl TaskManager {
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let cur = inner.current_task;
+        inner.tasks[cur].kern_time_off += inner.refresh_stop_watch();
         inner.tasks[cur].task_status = TaskStatus::Exited;
     }
 
@@ -144,6 +161,8 @@ impl TaskManager {
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
+            
+
             drop(inner);
             // before this, we should drop local variables that must be dropped manually
             unsafe {
@@ -151,11 +170,42 @@ impl TaskManager {
             }
             // go back to user mode
         } else {
+            let mut inner = self.inner.exclusive_access();
+            let current = inner.current_task;
+            let now=get_time_us();
+            inner.tasks[current].my_time+=now-inner.my_timer;
+            inner.my_timer=get_time_us();
+            drop(inner);
             println!("All applications completed!");
-            shutdown(false);
+            shutdown();
         }
     }
+
+    fn stop_user_time(&self){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].user_time_off += inner.refresh_stop_watch();
+    
+    }
+            
+    ///start_user_timer?
+    fn start_user_time(&self){
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+    
+        inner.tasks[current].kern_time_off += inner.refresh_stop_watch();
+    }    
 }
+
+impl TaskManagerInner{
+    ///timer_manage
+    fn refresh_stop_watch(&mut self) -> usize {
+        let start_time = self.timer;
+        self.timer = get_time_ms();
+        self.timer - start_time
+    }
+}
+
 
 /// Run the first task in task list.
 pub fn run_first_task() {
@@ -203,4 +253,54 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+///返回task_info
+pub fn get_task_info()->([u32; MAX_SYSCALL_NUM],usize,usize,usize,TaskStatus) {
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    // println!("pretimer:{},now:{}",inner.my_timer,get_time_ms());
+    inner.tasks[current].my_time+=get_time_us()-inner.my_timer;
+    inner.my_timer=get_time_us();
+    // println!("aftertimer:{}",inner.tasks[current].my_time);
+    let cur=&inner.tasks[current];
+    (cur.syscall_times,cur.my_time,cur.user_time_off,cur.kern_time_off,cur.task_status)
+}
+
+///增加syscall次数
+pub fn add_syscall_num(id:usize){
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    inner.tasks[current].syscall_times[id]+=1;
+}
+
+///user_time_stop
+pub fn user_time_stop(){
+    TASK_MANAGER.stop_user_time();
+}
+
+///user_time_start
+pub fn user_time_start(){
+    TASK_MANAGER.start_user_time();
+}
+
+///check_whether_a_VPN_is_valid
+pub fn check_page_validity(vpn:VirtPageNum)->usize{
+    let inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    let mut flag=1;
+    match inner.tasks[current].memory_set.translate(vpn) {
+        Some(pte)=> if pte.is_valid(){flag=0},
+        _=> flag=0,
+    };
+    flag
+}
+
+
+#[allow(unused)]
+///insert_vpnarea_to_memoryset
+pub fn insert_framed_area(start_va: VirtAddr,end_va: VirtAddr,permission: MapPermission){
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    inner.tasks[current].memory_set.insert_framed_area(start_va, end_va, permission);
 }

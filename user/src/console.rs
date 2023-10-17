@@ -1,12 +1,15 @@
+// os/src/console.rs
 use super::write;
 use core::fmt::{self, Write};
 
 struct Stdout;
 
-const STDOUT: usize = 1;
+// pub const STDIN: usize = 0;
+pub const STDOUT: usize = 1;
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
+        // we use syscall write to replace the sbi ABI
         write(STDOUT, s.as_bytes());
         Ok(())
     }

@@ -3,6 +3,7 @@ use super::TaskContext;
 use crate::config::{kernel_stack_position, TRAP_CONTEXT};
 use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::trap::{trap_handler, TrapContext};
+use crate::config::MAX_SYSCALL_NUM;
 
 /// task control block structure
 pub struct TaskControlBlock {
@@ -13,6 +14,14 @@ pub struct TaskControlBlock {
     pub base_size: usize,
     pub heap_bottom: usize,
     pub program_brk: usize,
+    //syscall_times
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    ///my_time
+    pub my_time:usize,
+    ///user_time_off
+    pub user_time_off:usize,
+    ///kern_time_off
+    pub kern_time_off:usize,
 }
 
 impl TaskControlBlock {
@@ -45,6 +54,10 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            my_time:0,
+            kern_time_off:0,
+            user_time_off:0,
+            syscall_times:[0;MAX_SYSCALL_NUM],
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
@@ -80,10 +93,15 @@ impl TaskControlBlock {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq,Debug)]
 /// task status: UnInit, Ready, Running, Exited
 pub enum TaskStatus {
+    ///uninit
+    UnInit,
+    ///ready
     Ready,
+    ///running
     Running,
+    ///exited
     Exited,
 }

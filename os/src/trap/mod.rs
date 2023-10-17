@@ -59,6 +59,7 @@ pub fn trap_handler() -> ! {
     let cx = current_trap_cx();
     let scause = scause::read();
     let stval = stval::read();
+    crate::task::user_time_stop();
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
             cx.sepc += 4;
@@ -87,6 +88,7 @@ pub fn trap_handler() -> ! {
             );
         }
     }
+    crate::task::user_time_start();
     trap_return();
 }
 
