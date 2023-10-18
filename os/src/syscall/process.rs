@@ -7,8 +7,9 @@ use crate::task::{change_program_brk, exit_current_and_run_next, suspend_current
 use crate::timer::get_time_us;
 //use super::SYSCALL_GET_TIME;
 use crate::config::{MAX_SYSCALL_NUM, PAGE_SIZE};
-use crate::mm::{translated_byte_buffer, VirtAddr,VPNRange, VirtPageNum};
-use crate::task::{current_user_token,check_page_validity,insert_framed_area};
+use crate::mm::{translated_byte_buffer, VirtAddr,VPNRange,MapPermission};
+#[allow(unused)]
+use crate::task::{current_user_token,check_page_validity,insert_framed_area,unmap_range};
 use core::mem::size_of;
 pub struct TimeVal {
     pub sec: usize,
@@ -18,7 +19,6 @@ pub struct TimeVal {
 #[derive(Copy, Clone,Debug)]
 #[repr(C)]
 pub struct TaskInfo {
-    pub off_time:usize,
     pub status: TaskStatus,
     pub syscall_times: [u32; MAX_SYSCALL_NUM],
     pub time: usize,
@@ -77,11 +77,10 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 /// YOUR JOB: Finish sys_task_info to pass testcases
 pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     let buffers = translated_byte_buffer(current_user_token(), ti as *const u8, size_of::<TaskInfo>());
-    let  (syscall_times,my_time,user_time_off,kern_time_off,status)=get_task_info();
+    let  (syscall_times,my_time,status)=get_task_info();
     let ti=TaskInfo{
         syscall_times,
         time:((((my_time/1_000_000) & 0xffff) * 1000 + (my_time%1_000_000) / 1000) as usize),
-        off_time:user_time_off+kern_time_off,
         status,
     };
     let ptr= &ti as *const TaskInfo as *const  u8;
@@ -98,28 +97,37 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     0
 }
 
-#[allow(unused)]
 pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize{
-    if(start%PAGE_SIZE!=0||
+    if start%PAGE_SIZE!=0||
        prot & !0x7!=0||
        prot & 0x7 == 0
-    ){return  -1;}
-    let s_vpn=VirtPageNum::from(start);
+    {return  -1;}
+    let s_vpn=VirtAddr::from(start).floor();
     let e_vpn=VirtAddr::from(start+len).ceil();
     let range=VPNRange::new(s_vpn, e_vpn);
     for vpn in range{
-        if(check_page_validity(vpn)==0){
-            println!("[FAIL][SYSCALL]sys_mmap,found_valid_page|vpn:{}",vpn.0);
+        if check_page_validity(vpn)==0{
+            println!("[FAIL][SYSCALL]sys_mmap,found_invalid_page|vpn:{:?}",vpn);
             return -1;
         }
-    }
-    
-    insert_framed_area(s_vpn.into(), e_vpn.into(), permission);
+   }
+    insert_framed_area(s_vpn.into(), e_vpn.into(), MapPermission::from_bits_truncate((prot << 1) as u8) | MapPermission::U);
     
     0
 } 
 
-#[allow(unused)]
 pub fn sys_munmap(start: usize, len: usize) -> isize{
+    if start%PAGE_SIZE!=0 {return  -1;}
+    let s_vpn=VirtAddr::from(start).floor();
+    let e_vpn=VirtAddr::from(start+len).ceil();
+    let range=VPNRange::new(s_vpn, e_vpn);
+    for vpn in range{
+        if check_page_validity(vpn)!=0{
+            println!("[FAIL][SYSCALL]sys_mmap,found_invalid_page|vpn:{}",vpn.0);
+            return -1;
+        }
+    }
+    unmap_range(range);
     0
+    //unmap_consecutive_area(start, len)
 }

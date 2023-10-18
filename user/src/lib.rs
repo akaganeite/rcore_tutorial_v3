@@ -66,7 +66,6 @@ const MAX_SYSCALL_NUM: usize = 500;
 #[repr(C)]
 #[derive(Debug)]
 pub struct TaskInfo {
-    pub off_time:usize,
     pub status: TaskStatus,
     pub syscall_times: [u32; MAX_SYSCALL_NUM],
     pub time: usize,
@@ -78,7 +77,6 @@ impl TaskInfo {
             status: TaskStatus::UnInit,
             syscall_times: [0; MAX_SYSCALL_NUM],
             time: 0,
-            off_time:0,
         }
     }
 }
