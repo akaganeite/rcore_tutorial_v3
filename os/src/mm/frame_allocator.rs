@@ -66,7 +66,7 @@ impl FrameAllocator for StackFrameAllocator {
     }
     fn alloc(&mut self) -> Option<PhysPageNum> {
         if let Some(ppn) = self.recycled.pop() {
-            Some(ppn.into())
+            Some(ppn.into())//如果有就用
         } else if self.current == self.end {
             None
         } else {

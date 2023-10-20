@@ -8,7 +8,7 @@ use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::cell::RefMut;
-
+use crate::config::MAX_SYSCALL_NUM;
 pub struct TaskControlBlock {
     // immutable
     pub pid: PidHandle,
@@ -26,6 +26,16 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
+    //syscall_times
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    ///my_time
+    pub my_time:usize,
+    ///timer
+    pub timer:usize,
+
+    pub heap_bottom: usize, // Heap bottom
+    pub program_brk: usize, // Program break
+    pub flag:bool,
 }
 
 impl TaskControlBlockInner {
@@ -71,12 +81,18 @@ impl TaskControlBlock {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: user_sp,
+                    heap_bottom: user_sp,
+                    program_brk: user_sp,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set,
                     parent: None,
                     children: Vec::new(),
                     exit_code: 0,
+                    my_time:0,
+                    syscall_times:[0;MAX_SYSCALL_NUM],
+                    timer:0,
+                    flag:false,
                 })
             },
         };
@@ -138,12 +154,18 @@ impl TaskControlBlock {
                 UPSafeCell::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: parent_inner.base_size,
+                    heap_bottom: parent_inner.heap_bottom,
+                    program_brk:parent_inner.program_brk,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                     task_status: TaskStatus::Ready,
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
                     exit_code: 0,
+                    syscall_times:[0;MAX_SYSCALL_NUM],
+                    my_time:0,
+                    timer:0,
+                    flag:false,
                 })
             },
         });
@@ -158,14 +180,48 @@ impl TaskControlBlock {
         // ---- release parent PCB automatically
         // **** release children PCB automatically
     }
+    
+    /// change the location of the program break. return None if failed.
+    pub fn change_program_brk(&self, size: i32) -> Option<usize> {
+        let mut inner = self.inner_exclusive_access();
+        let heap_bottom = inner.heap_bottom;
+        let old_break = inner.program_brk;
+        let new_brk = inner.program_brk as isize + size as isize;
+        if new_brk < heap_bottom as isize {
+            return None;
+        }
+        let result = if size < 0 {
+            inner
+                .memory_set
+                .shrink_to(VirtAddr(heap_bottom), VirtAddr(new_brk as usize))
+        } else {
+            inner
+                .memory_set
+                .append_to(VirtAddr(heap_bottom), VirtAddr(new_brk as usize))
+        };
+        if result {
+            inner.program_brk = new_brk as usize;
+            Some(old_break)
+        } else {
+            None
+        }
+    }
     pub fn getpid(&self) -> usize {
         self.pid.0
     }
 }
+    
+
 
 #[derive(Copy, Clone, PartialEq)]
+///status_of_task
 pub enum TaskStatus {
+    ///uninit
+    UnInit,
+    ///ready
     Ready,
+    ///running
     Running,
+    ///zombie
     Zombie,
 }

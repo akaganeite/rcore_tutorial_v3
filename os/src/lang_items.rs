@@ -15,5 +15,5 @@ fn panic(info: &PanicInfo) -> ! {
     } else {
         error!("[kernel] Panicked: {}", info.message().unwrap());
     }
-    shutdown(true)
+    shutdown(false)
 }

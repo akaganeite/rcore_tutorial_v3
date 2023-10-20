@@ -22,13 +22,18 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+
 use crate::loader::get_app_data_by_name;
 use crate::sbi::shutdown;
 use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
-use task::{TaskControlBlock, TaskStatus};
+pub use task::TaskStatus;
+use task::TaskControlBlock;
+use crate::config::MAX_SYSCALL_NUM;
+use crate::mm::{VirtPageNum,MapPermission,VirtAddr,VPNRange};
+use crate::timer::get_time_us;
 
 pub use context::TaskContext;
 pub use manager::add_task;
@@ -47,6 +52,7 @@ pub fn suspend_current_and_run_next() {
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
     // Change status to Ready
     task_inner.task_status = TaskStatus::Ready;
+    //task_inner.my_time+=get_time_us()-task_inner.timer;
     drop(task_inner);
     // ---- release current PCB
 
@@ -87,7 +93,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     inner.exit_code = exit_code;
     // do not move to its parent but under initproc
 
-    // ++++++ access initproc TCB exclusively
+    //  access initproc TCB exclusively
     {
         let mut initproc_inner = INITPROC.inner_exclusive_access();
         for child in inner.children.iter() {
@@ -95,11 +101,13 @@ pub fn exit_current_and_run_next(exit_code: i32) {
             initproc_inner.children.push(child.clone());
         }
     }
-    // ++++++ release parent PCB
+    //  release parent PCB
 
     inner.children.clear();
     // deallocate user space
     inner.memory_set.recycle_data_pages();
+    inner.my_time+=get_time_us()-inner.timer;
+    inner.timer=get_time_us();
     drop(inner);
     // **** release current PCB
     // drop task manually to maintain rc correctly
@@ -112,10 +120,61 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new(TaskControlBlock::new(
-        get_app_data_by_name("initproc").unwrap()
+        get_app_data_by_name("ch5b_initproc").unwrap()
     ));
 }
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+
+///返回task_info
+pub fn get_task_info()->([u32; MAX_SYSCALL_NUM],usize,TaskStatus) {
+    let cur = current_task().unwrap();
+    let mut inner=cur.inner_exclusive_access(); 
+    inner.my_time+=get_time_us()-inner.timer;
+    inner.timer=get_time_us();
+    (inner.syscall_times,inner.my_time,inner.task_status)
+    }
+    
+///增加syscall次数
+pub fn add_syscall_num(id:usize){
+    let cur = current_task().unwrap();
+    let mut inner=cur.inner_exclusive_access();
+    inner.syscall_times[id]+=1;
+}
+
+
+///check_whether_a_VPN_is_valid
+pub fn check_page_validity(vpn:VirtPageNum)->usize{
+    let cur = current_task().unwrap();
+    let  inner=cur.inner_exclusive_access();    
+    let mut flag=1;
+    if let Some(pte)=inner.memory_set.translate(vpn){
+        if pte.is_valid() {
+            flag=0;
+        }
+    }
+    //println!("flag:{}",flag);
+    flag
+}
+
+
+
+///insert_vpnarea_to_memoryset
+pub fn insert_framed_area(start_va: VirtAddr,end_va: VirtAddr,permission: MapPermission){
+    let cur = current_task().unwrap();
+    let mut inner=cur.inner_exclusive_access();    
+    inner.memory_set.insert_framed_area(start_va, end_va, permission);
+}
+
+
+#[allow(unused)]
+///unmap_a_range
+pub fn unmap_range(range:VPNRange){
+    let cur = current_task().unwrap();
+    let mut inner=cur.inner_exclusive_access();
+    for vpn in range{
+        inner.memory_set.get_page_table().unmap(vpn);
+    }
 }

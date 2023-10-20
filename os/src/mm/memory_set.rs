@@ -269,7 +269,45 @@ impl MemorySet {
         //*self = Self::new_bare();
         self.areas.clear();
     }
+    ///get_page_table
+    pub fn get_page_table(&mut self) -> &mut PageTable {
+        let a =&mut self.page_table;
+        a
+    }
+
+    /// shrink the area to new_end
+    #[allow(unused)]
+    pub fn shrink_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
+        if let Some(area) = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.get_start() == start.floor())
+        {
+            area.shrink_to(&mut self.page_table, new_end.ceil());
+            true
+        } else {
+            false
+        }
+    }
+
+    /// append the area to new_end
+    #[allow(unused)]
+    pub fn append_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
+        if let Some(area) = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.get_start() == start.floor())
+        {
+            area.append_to(&mut self.page_table, new_end.ceil());
+            true
+        } else {
+            false
+        }
+    }
 }
+
+
+
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
     vpn_range: VPNRange,
@@ -354,6 +392,20 @@ impl MapArea {
             }
             current_vpn.step();
         }
+    }
+    #[allow(unused)]
+    pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
+            self.unmap_one(page_table, vpn)
+        }
+        self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
+    }
+    #[allow(unused)]
+    pub fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        for vpn in VPNRange::new(self.vpn_range.get_end(), new_end) {
+            self.map_one(page_table, vpn)
+        }
+        self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
 }
 

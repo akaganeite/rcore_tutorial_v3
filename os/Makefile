@@ -30,6 +30,7 @@ TEST ?=
 
 build: env $(KERNEL_BIN)
 
+#cargo install cargo-binutils
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
 	cargo install cargo-binutils

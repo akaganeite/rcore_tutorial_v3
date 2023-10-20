@@ -22,9 +22,13 @@ SECTIONS
         *(.sdata .sdata.*)
     }
     .bss : {
+        *(.bss.stack)
+        sbss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
+        ebss = .;
     }
+
     /DISCARD/ : {
         *(.eh_frame)
         *(.debug*)

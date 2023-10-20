@@ -1,14 +1,23 @@
 use core::arch::asm;
+use super::{TimeVal, TaskInfo};
 
-const SYSCALL_READ: usize = 63;
-const SYSCALL_WRITE: usize = 64;
-const SYSCALL_EXIT: usize = 93;
-const SYSCALL_YIELD: usize = 124;
-const SYSCALL_GET_TIME: usize = 169;
-const SYSCALL_GETPID: usize = 172;
-const SYSCALL_FORK: usize = 220;
-const SYSCALL_EXEC: usize = 221;
-const SYSCALL_WAITPID: usize = 260;
+pub const SYSCALL_READ: usize = 63;
+pub const SYSCALL_WRITE: usize = 64;
+pub const SYSCALL_EXIT: usize = 93;
+pub const SYSCALL_YIELD: usize = 124;
+pub const SYSCALL_GET_TIME: usize = 169;
+pub const SYSCALL_TASK_INFO: usize = 410;
+pub const SYSCALL_MUNMAP: usize = 215;
+pub const SYSCALL_MMAP: usize = 222;
+pub const SYSCALL_SBRK: usize = 214;
+pub const SYSCALL_GETPID: usize = 172;
+pub const SYSCALL_FORK: usize = 220;
+pub const SYSCALL_EXEC: usize = 221;
+pub const SYSCALL_WAITPID: usize = 260;
+pub const SYSCALL_SPAWN: usize = 400;
+pub const SYSCALL_SET_PRIORITY: usize = 140;
+
+
 
 fn syscall(id: usize, args: [usize; 3]) -> isize {
     let mut ret: isize;
@@ -44,9 +53,12 @@ pub fn sys_yield() -> isize {
     syscall(SYSCALL_YIELD, [0, 0, 0])
 }
 
-pub fn sys_get_time() -> isize {
-    syscall(SYSCALL_GET_TIME, [0, 0, 0])
-}
+/// 功能：获取当前的时间，保存在 TimeVal 结构体 ts 中，_tz 在我们的实现中忽略
+/// 返回值：返回是否执行成功，成功则返回 0
+/// syscall ID：169
+pub fn sys_get_time(time: &TimeVal, tz: usize) -> isize {
+        syscall(SYSCALL_GET_TIME, [time as *const _ as usize, tz, 0])
+     }
 
 pub fn sys_getpid() -> isize {
     syscall(SYSCALL_GETPID, [0, 0, 0])
@@ -56,10 +68,47 @@ pub fn sys_fork() -> isize {
     syscall(SYSCALL_FORK, [0, 0, 0])
 }
 
-pub fn sys_exec(path: &str) -> isize {
-    syscall(SYSCALL_EXEC, [path.as_ptr() as usize, 0, 0])
+/// 功能：将当前进程的地址空间清空并加载一个特定的可执行文件，返回用户态后开始它的执行。
+/// 参数：字符串 path 给出了要加载的可执行文件的名字；
+/// 返回值：如果出错的话（如找不到名字相符的可执行文件）则返回 -1，否则不应该返回。
+/// 注意：path 必须以 "\0" 结尾，否则内核将无法确定其长度
+/// syscall ID：221
+pub fn sys_exec(path: &str, args: &[*const u8]) -> isize {
+    syscall(
+        SYSCALL_EXEC,
+        [path.as_ptr() as usize, args.as_ptr() as usize, 0],
+    )
 }
+
 
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32) -> isize {
     syscall(SYSCALL_WAITPID, [pid as usize, exit_code as usize, 0])
+}
+
+pub fn sys_task_info(info: &TaskInfo) -> isize {
+    syscall(SYSCALL_TASK_INFO, [info as *const _ as usize, 0, 0])
+}
+
+pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {   
+    syscall(SYSCALL_MMAP, [start, len, prot])
+}
+
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    syscall(SYSCALL_MUNMAP, [start, len, 0])
+}
+
+pub fn sys_sbrk(size: i32) -> isize {
+    syscall(SYSCALL_SBRK, [size as usize, 0, 0])
+}
+
+pub fn sys_spawn(path: &str) -> isize {
+    syscall(SYSCALL_SPAWN, [path.as_ptr() as usize, 0, 0])
+}
+
+// syscall ID：140
+// 设置当前进程优先级为 prio
+// 参数：prio 进程优先级，要求 prio >= 2
+// 返回值：如果输入合法则返回 prio，否则返回 -1
+pub fn sys_set_priority(prio: isize) -> isize {
+    syscall(SYSCALL_SET_PRIORITY, [prio as usize, 0, 0])
 }
