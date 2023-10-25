@@ -26,7 +26,7 @@ impl Bitmap {
         }
     }
     /// Allocate a new block from a block device
-    pub fn alloc(&self, block_device: &Arc<dyn BlockDevice>) -> Option<usize> {
+    pub fn alloc(&self, block_device: &Arc<dyn BlockDevice>) -> Option<usize> {//实现了 BlockDevice的都可以传进来
         for block_id in 0..self.blocks {
             let pos = get_block_cache(
                 block_id + self.start_block_id as usize,
