@@ -99,8 +99,54 @@ bitflags! {
     }
 }
 
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct Stat {
+    /// ID of device containing file
+    pub dev: u64,
+    /// inode number
+    pub ino: u64,
+    /// file type and mode
+    pub mode: StatMode,
+    /// number of hard links
+    pub nlink: u32,
+    /// unused pad
+    pad: [u64; 7],
+}
+
+impl Stat {
+    pub fn new() -> Self {
+        Stat {
+            dev: 0,
+            ino: 0,
+            mode: StatMode::NULL,
+            nlink: 0,
+            pad: [0; 7],
+        }
+    }
+}
+
+impl Default for Stat {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+bitflags! {
+    pub struct StatMode: u32 {
+        const NULL  = 0;
+        /// directory
+        const DIR   = 0o040000;
+        /// ordinary regular file
+        const FILE  = 0o100000;
+    }
+}
+
+const AT_FDCWD: isize = -100;
+
 pub fn open(path: &str, flags: OpenFlags) -> isize {
-    sys_open(path, flags.bits)
+    sys_openat(AT_FDCWD as usize, path, flags.bits, OpenFlags::RDWR.bits)
 }
 pub fn close(fd: usize) -> isize {
     sys_close(fd)
@@ -191,4 +237,16 @@ pub fn spawn(path: &str) -> isize {
 
 pub fn set_priority(prio: isize) -> isize {
     sys_set_priority(prio)
+}
+
+pub fn link(old_path: &str, new_path: &str) -> isize {
+    sys_linkat(AT_FDCWD as usize, old_path, AT_FDCWD as usize, new_path, 0)
+}
+
+pub fn unlink(path: &str) -> isize {
+    sys_unlinkat(AT_FDCWD as usize, path, 0)
+}
+
+pub fn fstat(fd: usize, st: &Stat) -> isize {
+    sys_fstat(fd, st)
 }

@@ -1,7 +1,10 @@
 use core::arch::asm;
-use super::{TimeVal, TaskInfo};
+use super::{TimeVal, TaskInfo,Stat};
 
-const SYSCALL_OPEN: usize = 56;
+pub const SYSCALL_UNLINKAT: usize = 35;
+pub const SYSCALL_LINKAT: usize = 37;
+pub const SYSCALL_FSTAT: usize = 80;
+const SYSCALL_OPENAT: usize = 56;
 const SYSCALL_CLOSE: usize = 57;
 pub const SYSCALL_READ: usize = 63;
 pub const SYSCALL_WRITE: usize = 64;
@@ -34,9 +37,36 @@ fn syscall(id: usize, args: [usize; 3]) -> isize {
     }
     ret
 }
+pub fn syscall6(id: usize, args: [usize; 6]) -> isize {
+    let mut ret: isize;
+    unsafe {
+        core::arch::asm!("ecall",
+            inlateout("x10") args[0] => ret,
+            in("x11") args[1],
+            in("x12") args[2],
+            in("x13") args[3],
+            in("x14") args[4],
+            in("x15") args[5],
+            in("x17") id
+        );
+    }
+    ret
+}
 
-pub fn sys_open(path: &str, flags: u32) -> isize {
-    syscall(SYSCALL_OPEN, [path.as_ptr() as usize, flags as usize, 0])
+
+
+pub fn sys_openat(dirfd: usize, path: &str, flags: u32, mode: u32) -> isize {
+    syscall6(
+        SYSCALL_OPENAT,
+        [
+            dirfd,
+            path.as_ptr() as usize,
+            flags as usize,
+            mode as usize,
+            0,
+            0,
+        ],
+    )
 }
 
 pub fn sys_close(fd: usize) -> isize {
@@ -117,4 +147,32 @@ pub fn sys_spawn(path: &str) -> isize {
 // 返回值：如果输入合法则返回 prio，否则返回 -1
 pub fn sys_set_priority(prio: isize) -> isize {
     syscall(SYSCALL_SET_PRIORITY, [prio as usize, 0, 0])
+}
+
+pub fn sys_linkat(
+    old_dirfd: usize,
+    old_path: &str,
+    new_dirfd: usize,
+    new_path: &str,
+    flags: usize,
+) -> isize {
+    syscall6(
+        SYSCALL_LINKAT,
+        [
+            old_dirfd,
+            old_path.as_ptr() as usize,
+            new_dirfd,
+            new_path.as_ptr() as usize,
+            flags,
+            0,
+        ],
+    )
+}
+
+pub fn sys_unlinkat(dirfd: usize, path: &str, flags: usize) -> isize {
+    syscall(SYSCALL_UNLINKAT, [dirfd, path.as_ptr() as usize, flags])
+}
+
+pub fn sys_fstat(fd: usize, st: &Stat) -> isize {
+    syscall(SYSCALL_FSTAT, [fd, st as *const _ as usize, 0])
 }
