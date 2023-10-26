@@ -16,6 +16,8 @@ const TESTS: &[&str] = &[
     "ch5b_exit\0",
     "ch5b_forktest_simple\0",
     "ch5b_forktest\0",
+    "ch6b_filetest_simple\0",
+    "ch6b_cat\0",
 ];
 
 const TEST_NUM: usize = TESTS.len();
@@ -47,3 +49,4 @@ pub fn main() -> i32 {
     println!("Basic usertests passed!");
     0
 }
+

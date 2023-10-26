@@ -20,12 +20,13 @@ mod pid;
 mod processor;
 mod switch;
 #[allow(clippy::module_inception)]
+#[allow(rustdoc::private_intra_doc_links)]
 mod task;
 
-
-use crate::loader::get_app_data_by_name;
+use crate::fs::{open_file, OpenFlags};
 use crate::sbi::shutdown;
 use alloc::sync::Arc;
+pub use context::TaskContext;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
@@ -35,7 +36,6 @@ use crate::config::MAX_SYSCALL_NUM;
 use crate::mm::{VirtPageNum,MapPermission,VirtAddr,VPNRange};
 use crate::timer::get_time_us;
 
-pub use context::TaskContext;
 pub use manager::add_task;
 pub use pid::{pid_alloc, KernelStack, PidAllocator, PidHandle};
 pub use processor::{
@@ -119,9 +119,11 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
 lazy_static! {
     ///Globle process that init user shell
-    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new(TaskControlBlock::new(
-        get_app_data_by_name("ch5b_initproc").unwrap()
-    ));
+    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
+        let inode = open_file("ch6b_initproc", OpenFlags::RDONLY).unwrap();
+        let v = inode.read_all();
+        TaskControlBlock::new(v.as_slice())
+    });
 }
 ///Add init process to the manager
 pub fn add_initproc() {

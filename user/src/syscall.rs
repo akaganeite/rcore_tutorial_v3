@@ -1,6 +1,8 @@
 use core::arch::asm;
 use super::{TimeVal, TaskInfo};
 
+const SYSCALL_OPEN: usize = 56;
+const SYSCALL_CLOSE: usize = 57;
 pub const SYSCALL_READ: usize = 63;
 pub const SYSCALL_WRITE: usize = 64;
 pub const SYSCALL_EXIT: usize = 93;
@@ -31,6 +33,14 @@ fn syscall(id: usize, args: [usize; 3]) -> isize {
         );
     }
     ret
+}
+
+pub fn sys_open(path: &str, flags: u32) -> isize {
+    syscall(SYSCALL_OPEN, [path.as_ptr() as usize, flags as usize, 0])
+}
+
+pub fn sys_close(fd: usize) -> isize {
+    syscall(SYSCALL_CLOSE, [fd, 0, 0])
 }
 
 pub fn sys_read(fd: usize, buffer: &mut [u8]) -> isize {
@@ -73,13 +83,9 @@ pub fn sys_fork() -> isize {
 /// 返回值：如果出错的话（如找不到名字相符的可执行文件）则返回 -1，否则不应该返回。
 /// 注意：path 必须以 "\0" 结尾，否则内核将无法确定其长度
 /// syscall ID：221
-pub fn sys_exec(path: &str, args: &[*const u8]) -> isize {
-    syscall(
-        SYSCALL_EXEC,
-        [path.as_ptr() as usize, args.as_ptr() as usize, 0],
-    )
+pub fn sys_exec(path: &str) -> isize {
+    syscall(SYSCALL_EXEC, [path.as_ptr() as usize, 0, 0])
 }
-
 
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32) -> isize {
     syscall(SYSCALL_WAITPID, [pid as usize, exit_code as usize, 0])

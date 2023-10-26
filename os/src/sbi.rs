@@ -1,4 +1,4 @@
-// os/src/sbi.rs
+//! os/src/sbi.rs sbi_calls
 #![allow(unused)] // 此行请放在该文件最开头
 const SBI_SET_TIMER: usize = 0;
 const SBI_CONSOLE_PUTCHAR: usize = 1;
@@ -29,7 +29,7 @@ fn sbi_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
     ret
 }
 
-// console output
+/// console output
 pub fn console_putchar(c: usize) {
     sbi_call(SBI_CONSOLE_PUTCHAR, c, 0, 0);
 }

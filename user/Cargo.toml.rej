@@ -1,9 +1,0 @@
-diff a/user/Cargo.toml b/user/Cargo.toml	(rejected hunks)
-@@ -8,6 +8,7 @@ edition = "2018"
- 
- [dependencies]
- 
-+
- [profile.release]
- debug = true
- 
