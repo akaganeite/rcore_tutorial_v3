@@ -5,13 +5,13 @@ use lazy_static::*;
 use spin::Mutex;
 /// Cached block inside memory
 pub struct BlockCache {
-    /// cached block data
+    /// cached block data,是一个 512 字节的数组，表示位于内存中的缓冲区
     cache: [u8; BLOCK_SZ],
-    /// underlying block id
+    /// underlying block id,记录了这个块缓存来自于磁盘中的块的编号
     block_id: usize,
-    /// underlying block device
+    /// underlying block device,是一个底层块设备的引用，可通过它进行块读写
     block_device: Arc<dyn BlockDevice>,
-    /// whether the block is dirty
+    /// whether the block is dirty 记录这个块从磁盘载入内存缓存之后，它有没有被修改过
     modified: bool,
 }
 
@@ -19,7 +19,7 @@ impl BlockCache {
     /// Load a new BlockCache from disk.
     pub fn new(block_id: usize, block_device: Arc<dyn BlockDevice>) -> Self {
         let mut cache = [0u8; BLOCK_SZ];
-        block_device.read_block(block_id, &mut cache);
+        block_device.read_block(block_id, &mut cache);//创建时将块内容从磁盘读到内存
         Self {
             cache,
             block_id,
