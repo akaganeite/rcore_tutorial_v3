@@ -4,7 +4,7 @@ use crate::sync::UPSafeCell;
 use alloc::sync::{Arc, Weak};
 
 use crate::task::suspend_current_and_run_next;
-
+//pipe是端口
 pub struct Pipe {
     readable: bool,
     writable: bool,
@@ -36,7 +36,7 @@ enum RingBufferStatus {
     Empty,
     Normal,
 }
-
+//ringbuffer存数据
 pub struct PipeRingBuffer {
     arr: [u8; RING_BUFFER_SIZE],
     head: usize,
